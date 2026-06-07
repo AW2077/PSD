@@ -4,47 +4,114 @@ import random
 from kafka import KafkaProducer
 from datetime import datetime
 
+# konfiguracja brokera
 KAFKA_BROKER = 'localhost:9092'
 TOPIC = 'transactions'
+
+polish_cities = [
+    {"name": "Warszawa", "lat": 52.2297, "lon": 21.0122},
+    {"name": "Krakow", "lat": 50.0647, "lon": 19.9450},
+    {"name": "Lodz", "lat": 51.7592, "lon": 19.4560},
+    {"name": "Wroclaw", "lat": 51.1079, "lon": 17.0385},
+    {"name": "Poznan", "lat": 52.4064, "lon": 16.9252},
+    {"name": "Gdansk", "lat": 54.3520, "lon": 18.6466},
+    {"name": "Szczecin", "lat": 53.4285, "lon": 14.5528},
+    {"name": "Bydgoszcz", "lat": 53.1235, "lon": 18.0084},
+    {"name": "Lublin", "lat": 51.2465, "lon": 22.5684},
+    {"name": "Bialystok", "lat": 53.1325, "lon": 23.1688},
+    {"name": "Katowice", "lat": 50.2649, "lon": 19.0238},
+    {"name": "Gdynia", "lat": 54.5189, "lon": 18.5305},
+    {"name": "Czestochowa", "lat": 50.8118, "lon": 19.1203},
+    {"name": "Radom", "lat": 51.4027, "lon": 21.1471},
+    {"name": "Torun", "lat": 53.0138, "lon": 18.5984}
+]
+
+# rozszerzona lista 15 zagranicznych miast (anomalie)
+foreign_cities = [
+    {"name": "Nowy Jork", "lat": 40.7128, "lon": -74.0060},
+    {"name": "Tokio", "lat": 35.6762, "lon": 139.6503},
+    {"name": "Sydney", "lat": -33.8688, "lon": 151.2093},
+    {"name": "Kapsztad", "lat": -33.9249, "lon": 18.4241},
+    {"name": "Rio de Janeiro", "lat": -22.9068, "lon": -43.1729},
+    {"name": "Londyn", "lat": 51.5074, "lon": -0.1278},
+    {"name": "Paryz", "lat": 48.8566, "lon": 2.3522},
+    {"name": "Pekin", "lat": 39.9042, "lon": 116.4074},
+    {"name": "Dubaj", "lat": 25.2048, "lon": 55.2708},
+    {"name": "Los Angeles", "lat": 34.0522, "lon": -118.2437},
+    {"name": "Moskwa", "lat": 55.7558, "lon": 37.6173},
+    {"name": "Bombaj", "lat": 19.0760, "lon": 72.8777},
+    {"name": "Kair", "lat": 30.0444, "lon": 31.2357},
+    {"name": "Toronto", "lat": 43.6510, "lon": -79.3470},
+    {"name": "Buenos Aires", "lat": -34.6037, "lon": -58.3816}
+]
 
 producer = KafkaProducer(
     bootstrap_servers=[KAFKA_BROKER],
     value_serializer=lambda x: json.dumps(x).encode('utf-8')
 )
 
-cards = {f"CARD_{i:05d}": {"limit": random.choice([2000, 5000, 10000]), "lat": 52.22, "lon": 21.01} for i in range(1, 1000)}
+users = [f"USER_{i:04d}" for i in range(2000)]
+cards_data = []
 
-print("🚀 Uruchamiam symulator transakcji...")
+for i in range(10000):
+    cards_data.append({
+        "card_id": f"CARD_{i:05d}",
+        "user_id": random.choice(users),
+        "limit": random.choice([2000, 5000, 10000, 20000]),
+        "home_city": random.choice(polish_cities)
+    })
+
+print("Uruchomiono symulator transakcji...")
+
+# czas startu do rozgrzewki
+start_time = time.time()
 
 try:
     while True:
-        card_id = random.choice(list(cards.keys()))
-        card = cards[card_id]
+        card = random.choice(cards_data)
         
-        amount = round(random.uniform(5.0, card['limit'] * 0.1), 2)
-        lat = card['lat'] + random.uniform(-0.01, 0.01)
-        lon = card['lon'] + random.uniform(-0.01, 0.01)
+        amount = round(random.uniform(10.0, 500.0), 2)
+        location = card['home_city']
+        is_frequency_burst = False
         
-        # Wstrzykiwanie anomalii
-        if random.random() < 0.05:
-            if random.choice([True, False]):
-                amount = round(card['limit'] * random.uniform(1.1, 1.5), 2) # Przekroczenie limitu
-            else:
-                lat, lon = random.uniform(-90.0, 90.0), random.uniform(-180.0, 180.0) # Skok lokalizacji
-
-        card['lat'], card['lon'] = lat, lon
-
+        # anomalie aktywowane dopiero po 10 sekundach
+        if (time.time() - start_time > 10.0) and random.random() < 0.05:
+            
+            # waga frequency 2% w puli oszustw
+            anomaly_type = random.choices(['AMOUNT', 'LOCATION', 'FREQUENCY'], weights=[0.49, 0.49, 0.02])[0]
+            
+            if anomaly_type == 'AMOUNT':
+                amount = round(card['limit'] * random.uniform(1.1, 1.5), 2)
+            elif anomaly_type == 'LOCATION':
+                location = random.choice(foreign_cities)
+            elif anomaly_type == 'FREQUENCY':
+                is_frequency_burst = True
+                
+        lat = location['lat'] + random.uniform(-0.02, 0.02)
+        lon = location['lon'] + random.uniform(-0.02, 0.02)
+                
         transaction = {
-            "card_id": card_id,
+            "card_id": card['card_id'],
+            "user_id": card['user_id'],
+            "city": location['name'],
+            "gps_location": {
+                "lat": round(lat, 4), 
+                "lon": round(lon, 4)
+            },
             "amount": amount,
-            "available_limit": card["limit"],
-            "gps_location": {"lat": round(lat, 4), "lon": round(lon, 4)},
+            "available_limit": card['limit'],
             "timestamp": datetime.utcnow().isoformat()
         }
+        
+        if is_frequency_burst:
+            producer.send(TOPIC, value=transaction)
+            time.sleep(0.1)
+            transaction['timestamp'] = datetime.utcnow().isoformat()
+        
         producer.send(TOPIC, value=transaction)
         time.sleep(0.05)
-
+        
 except KeyboardInterrupt:
-    print("Zatrzymano.")
+    print("zatrzymano symulator.")
 finally:
     producer.close()
