@@ -20,11 +20,11 @@ Aby uruchomić projekt, upewnij się, że masz zainstalowane:
 - `test_consumer.py`: Sniffer diagnostyczny do walidacji surowych danych w Kafce.
 
 
-## Uruchomienie(bash w folderze projektu)
-docker-compose up -d
-python -m venv .venv
-source ./.venv/bin/activate (Linux) lub .\.venv\Scripts\activate (Windows)
-pip install -r requirements.txt
+## Uruchomienie (bash w folderze projektu)
+- docker-compose up -d
+- python -m venv .venv
+- source ./.venv/bin/activate (Linux) lub .\.venv\Scripts\activate (Windows)
+- pip install -r requirements.txt
 
 ## Kolejność uruchomienia
 Zalecane uruchomienie w osobnych terminalach:
