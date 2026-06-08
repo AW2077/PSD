@@ -27,7 +27,7 @@ try:
         # zapis do bazy danych
         alarms_collection.insert_one(alarm_data.copy())
         
-        # parskowanie pol z jsona
+        # przypisanie pol z jsona
         card = alarm_data.get('card_id')
         reasons_list = alarm_data.get('anomaly_reasons', [])
         reasons_str = ", ".join(reasons_list)
@@ -36,10 +36,14 @@ try:
         city = alarm_data.get('city', 'nieznane')
         prev_city = alarm_data.get('prev_city', 'nieznane')
         time_diff = alarm_data.get('time_since_last')
+        gps = alarm_data.get('gps_location', {})
+        lat = gps.get('lat', 'brak danych')
+        lon = gps.get('lon', 'brak danych')
         
         print(f"ALARM | uwaga, podejrzana aktywnosc na karcie {card}")
         print(f"      | powod: {reasons_str}")
         print(f"      | kwota transakcji: {amount} pln")
+        print(f"      | lokalizacja GPS: lat {lat}, lon {lon}")
         
         # weryfikacja szczegolowa pod typy anomalii
         if 'LIMIT_EXCEEDED_ANOMALY' in reasons_list:

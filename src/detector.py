@@ -34,6 +34,7 @@ class StatefulAnomalyDetector(KeyedProcessFunction):
             
             alarms = []
             time_diff_seconds = None
+            is_foreign_first_tx = False 
             
             # 1. twarda regula limitu bankowego
             if amount > limit:
@@ -51,23 +52,26 @@ class StatefulAnomalyDetector(KeyedProcessFunction):
                 if time_diff_seconds < 3.0:
                     alarms.append('HIGH_FREQUENCY_ANOMALY')
 
-                # 3. detekcja statystyczna (kwota > 3x srednia)
+                # 3. detekcja skoku lokalizacji (tolerancja > 15 stopni)
+                if abs(lat - last_lat) > 15.0 or abs(lon - last_lon) > 15.0:
+                    alarms.append('LOCATION_JUMP_ANOMALY')
+                    
+                # 4. detekcja statystyczna (kwota > 3x srednia)
                 if count > 5:
                     avg = sum_amt / count
                     if amount > (avg * 3.0):
                         alarms.append('STATISTICAL_AMOUNT_ANOMALY')
-
-                # 4. detekcja skoku lokalizacji (tolerancja > 15 stopni)
-                if abs(lat - last_lat) > 15.0 or abs(lon - last_lon) > 15.0:
-                    alarms.append('LOCATION_JUMP_ANOMALY')
             else:
                 # wartosci poczatkowe dla nowych kart
                 sum_amt = 0.0
                 count = 0
                 last_city = city
+                
+                if not (49.0 <= lat <= 55.0 and 14.0 <= lon <= 25.0):
+                    is_foreign_first_tx = True
 
-            # aktualizacja bezpiecznego stanu (tylko czyste transakcje ucza model)
-            if not alarms:
+            # aktualizacja bezpiecznego stanu
+            if not alarms and not is_foreign_first_tx:
                 self.stats_state.update([sum_amt + amount, count + 1, lat, lon, current_time_str, city])
 
             # wyslanie alarmow do kafki
@@ -91,13 +95,11 @@ def main():
 
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
-    # --- konfiguracja pamieci trwalej (checkpointing) ---
-    # zapis stanu co 10 sekund
+    # konfiguracja pamieci trwalej (checkpointing)
     env.enable_checkpointing(10000)
     checkpoints_dir = os.path.join(project_root, "checkpoints")
     os.makedirs(checkpoints_dir, exist_ok=True)
     env.get_checkpoint_config().set_checkpoint_storage_dir(f"file:///{checkpoints_dir.replace(os.sep, '/')}")
-    # ----------------------------------------------------
 
     jar_path = os.path.join(project_root, "jars", "flink-sql-connector-kafka-3.2.0-1.19.jar")
     env.add_jars(f"file:///{jar_path.replace(os.sep, '/')}")

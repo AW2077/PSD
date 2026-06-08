@@ -24,12 +24,13 @@ try:
         lat = data.get('gps_location', {}).get('lat')
         lon = data.get('gps_location', {}).get('lon')
         
-        # surowa wizualizacja ruchu
-        print(f"transakcja | karta: {card} | uzytkownik: {user} | "
-              f"kwota: {amount} pln (limit: {limit}) | "
-              f"gps: [{lat}, {lon}]")
+
+        print(f"TXN   | karta: {card} ({user})")
+        print(f"      | kwota: {amount} pln (limit: {limit} pln)")
+        print(f"      | gps:   [{lat}, {lon}]")
+        print("-" * 60)
               
 except KeyboardInterrupt:
-    print("zatrzymano czytnik testowy.")
+    print("\nzatrzymano czytnik testowy.")
 finally:
     consumer.close()

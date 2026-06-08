@@ -1,6 +1,7 @@
 import json
 import time
 import random
+import os
 from kafka import KafkaProducer
 from datetime import datetime
 
@@ -26,7 +27,7 @@ polish_cities = [
     {"name": "Torun", "lat": 53.0138, "lon": 18.5984}
 ]
 
-# rozszerzona lista 15 zagranicznych miast (anomalie)
+#lista zagranicznych miast (anomalie lokalizacyjne)
 foreign_cities = [
     {"name": "Nowy Jork", "lat": 40.7128, "lon": -74.0060},
     {"name": "Tokio", "lat": 35.6762, "lon": 139.6503},
@@ -50,35 +51,51 @@ producer = KafkaProducer(
     value_serializer=lambda x: json.dumps(x).encode('utf-8')
 )
 
-users = [f"USER_{i:04d}" for i in range(2000)]
-cards_data = []
+DB_FILE = 'cards_database.json'
 
-for i in range(10000):
-    cards_data.append({
-        "card_id": f"CARD_{i:05d}",
-        "user_id": random.choice(users),
-        "limit": random.choice([2000, 5000, 10000, 20000]),
-        "home_city": random.choice(polish_cities)
-    })
+#baza kart i wlascicieli(zeby dana karta zawsze nalezala do tego samego wlasciciela)
+if os.path.exists(DB_FILE):
+    print("Wczytywanie bazy kart z pliku...")
+    with open(DB_FILE, 'r') as f:
+        cards_data = json.load(f)
+else:
+    print("Generowanie nowej bazy kart...")
+    users = [f"USER_{i:04d}" for i in range(2000)]
+    cards_data = []
+
+    for i in range(10000):
+        cards_data.append({
+            "card_id": f"CARD_{i:05d}",
+            "user_id": random.choice(users),
+            "limit": random.choice([2000, 5000, 10000, 20000]),
+            "home_city": random.choice(polish_cities)
+        })
+    
+    # zapis bazy do pliku
+    with open(DB_FILE, 'w') as f:
+        json.dump(cards_data, f, indent=4)
+
 
 print("Uruchomiono symulator transakcji...")
-
-# czas startu do rozgrzewki
-start_time = time.time()
 
 try:
     while True:
         card = random.choice(cards_data)
         
+        # 80% transakcji odbywa się w mieście domowym, 20% w losowym innym polskim mieście
+        if random.random() < 0.20:
+            location = random.choice(polish_cities)
+        else:
+            location = card['home_city']
+            
         amount = round(random.uniform(10.0, 500.0), 2)
-        location = card['home_city']
         is_frequency_burst = False
         
-        # anomalie aktywowane dopiero po 10 sekundach
-        if (time.time() - start_time > 10.0) and random.random() < 0.05:
+        # 5% szansy na wystapienie anomalii
+        if random.random() < 0.05:
             
-            # waga frequency 2% w puli oszustw
-            anomaly_type = random.choices(['AMOUNT', 'LOCATION', 'FREQUENCY'], weights=[0.49, 0.49, 0.02])[0]
+            # waga wystapienia anomalii
+            anomaly_type = random.choices(['AMOUNT', 'LOCATION', 'FREQUENCY'], weights=[0.38, 0.60, 0.02])[0]
             
             if anomaly_type == 'AMOUNT':
                 amount = round(card['limit'] * random.uniform(1.1, 1.5), 2)
@@ -86,7 +103,9 @@ try:
                 location = random.choice(foreign_cities)
             elif anomaly_type == 'FREQUENCY':
                 is_frequency_burst = True
-                
+
+
+        #lekkie korekty wspolrzednych, zeby wszystkie nie byly takie same        
         lat = location['lat'] + random.uniform(-0.02, 0.02)
         lon = location['lon'] + random.uniform(-0.02, 0.02)
                 
