@@ -1,16 +1,9 @@
 import json
 from kafka import KafkaConsumer
-from pymongo import MongoClient
 
 # konfiguracja
 KAFKA_BROKER = 'localhost:9092'
-MONGO_URI = 'mongodb://localhost:27017/'
 TOPIC = 'alarms'
-
-# polaczenie z baza
-mongo_client = MongoClient(MONGO_URI)
-db = mongo_client['fraud_database']
-alarms_collection = db['alarms_history']
 
 consumer = KafkaConsumer(
     TOPIC,
@@ -18,14 +11,12 @@ consumer = KafkaConsumer(
     value_deserializer=lambda x: json.loads(x.decode('utf-8'))
 )
 
-print("Uruchomiono monitor alarmow. Polaczono z mongodb.")
+print("Uruchomiono monitor alarmow...")
 
 try:
     for message in consumer:
         alarm_data = message.value
         
-        # zapis do bazy danych
-        alarms_collection.insert_one(alarm_data.copy())
         
         # przypisanie pol z jsona
         card = alarm_data.get('card_id')
@@ -64,4 +55,3 @@ except KeyboardInterrupt:
     print("zatrzymano monitor alarmow.")
 finally:
     consumer.close()
-    mongo_client.close()

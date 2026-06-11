@@ -32,22 +32,26 @@ services:
       - "27017:27017"
 
   jobmanager:
-    image: flink:1.19
+    build: .
     container_name: flink-jobmanager
     command: jobmanager
     ports:
       - "8081:8081"
     environment:
       JOB_MANAGER_RPC_ADDRESS: jobmanager
+    volumes:
+      - .:/opt/flink/project
 
   taskmanager:
-    image: flink:1.19
+    build: .
     container_name: flink-taskmanager
     depends_on:
       - jobmanager
     command: taskmanager
     environment:
       JOB_MANAGER_RPC_ADDRESS: jobmanager
+    volumes:
+      - .:/opt/flink/project
 
   kafdrop:
     image: obsidiandynamics/kafdrop:latest

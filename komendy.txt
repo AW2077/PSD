@@ -1,0 +1,7 @@
+//wlaczanie detektora w dockerze
+docker exec -it flink-jobmanager flink run -py /opt/flink/project/src/detector.py
+
+
+//wylaczanie
+docker exec -it flink-jobmanager flink list
+docker exec -it flink-jobmanager flink cancel TUTAJ_WKLEJ_JOB_ID
