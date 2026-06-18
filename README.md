@@ -11,7 +11,7 @@ System opiera się na architekturze strumieniowej:
 Aby uruchomić projekt, upewnij się, że masz zainstalowane:
 - **Java (JDK 11):** Wymagane dla silnika Apache Flink oraz brokera Apache Kafka.
 - **Docker & Docker Compose:** 
-- **Python 3.11+**
+- **Python 3.11.9**
 
 ## Struktura projektu
 - `simulator.py`: Generuje strumień transakcji (10 000 kart, 15 miast). Wprowadza 5% anomalii.
@@ -22,7 +22,7 @@ Aby uruchomić projekt, upewnij się, że masz zainstalowane:
 
 ## Uruchomienie (bash w folderze projektu)
 - docker-compose up -d
-- python -m venv .venv
+- python -3.11 -m venv .venv
 - source ./.venv/bin/activate (Linux) lub .\.venv\Scripts\activate (Windows)
 - pip install -r requirements.txt
 
