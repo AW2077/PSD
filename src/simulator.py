@@ -90,12 +90,14 @@ try:
             
         amount = round(random.uniform(10.0, 500.0), 2)
         is_frequency_burst = False
+        is_fraud_flag = 0
         
-        # 5% szansy na wystapienie anomalii
-        if random.random() < 0.05:
+        # 20% szansy na wystapienie anomalii
+        if random.random() < 0.20:
             
             # waga wystapienia anomalii
             anomaly_type = random.choices(['AMOUNT', 'LOCATION', 'FREQUENCY'], weights=[0.38, 0.60, 0.02])[0]
+            is_fraud_flag = 1
             
             if anomaly_type == 'AMOUNT':
                 amount = round(card['limit'] * random.uniform(1.1, 1.5), 2)
@@ -119,7 +121,8 @@ try:
             },
             "amount": amount,
             "available_limit": card['limit'],
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
+            "is_fraud": is_fraud_flag
         }
         
         if is_frequency_burst:

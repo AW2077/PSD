@@ -4,15 +4,33 @@ import json
 import matplotlib.pyplot as plt
 import time
 from kafka import KafkaConsumer
+from pymongo import MongoClient
 
 # konfiguracja strony
 st.set_page_config(page_title="Detekcja Anomalii", page_icon="🚨", layout="wide")
-st.title("🚨 Monitor Strumieniowy Anomalii")
-st.markdown("Automatyczny podgląd pełnej historii alertów z klastra Apache Flink.")
+st.title("Monitor Strumieniowy Anomalii")
+st.markdown("Automatyczny podgląd pełnej historii alertów z klastra Apache Flink oraz bazy MongoDB.")
 
-# pamiec historii alertow
+# KONFIGURACJA MONGO
+MONGO_URI = 'mongodb://localhost:27017/'
+DB_NAME = 'fraud_database'
+COLLECTION_NAME = 'alarms_history'
+
+@st.cache_resource
+def get_mongo_collection():
+    client = MongoClient(MONGO_URI)
+    return client[DB_NAME][COLLECTION_NAME]
+
+collection = get_mongo_collection()
+
+# Inicjalizacja pamieci historii alertow
 if 'alarms_history' not in st.session_state:
-    st.session_state['alarms_history'] = []
+    try:
+        db_alarms = list(collection.find({}, {'_id': 0}))
+        st.session_state['alarms_history'] = db_alarms
+    except Exception as e:
+        st.error(f"Nie udało się pobrać historii z MongoDB: {e}")
+        st.session_state['alarms_history'] = []
 
 # konsument kafki
 @st.cache_resource
@@ -20,7 +38,7 @@ def get_kafka_consumer():
     return KafkaConsumer(
         'alarms',
         bootstrap_servers=['localhost:9092'],
-        auto_offset_reset='earliest',
+        auto_offset_reset='latest',
         enable_auto_commit=False,
         value_deserializer=lambda x: json.loads(x.decode('utf-8')),
         consumer_timeout_ms=500
@@ -28,7 +46,6 @@ def get_kafka_consumer():
 
 consumer = get_kafka_consumer()
 
-# pobieranie wiadomosci z kafki
 for msg in consumer:
     st.session_state['alarms_history'].append(msg.value)
 
@@ -42,29 +59,37 @@ def parse_anomaly_details(row):
     if 'LIMIT_EXCEEDED_ANOMALY' in reasons:
         kwota = row.get('amount', 0)
         limit = row.get('available_limit', 0)
-        roznica = kwota - limit
-        details.append(f"💳 Przekroczono limit o {roznica:.2f} PLN (Transakcja: {kwota} / Limit: {limit})")
+        roznica = float(kwota) - float(limit)
+        details.append(f"Przekroczono limit o {roznica:.2f} PLN (Transakcja: {kwota} / Limit: {limit})")
         
     if 'HIGH_FREQUENCY_ANOMALY' in reasons:
         sekundy = row.get('time_since_last', 0)
-        details.append(f"⏱️ Podejrzana częstotliwość: zaledwie {sekundy} sek. od poprzedniej transakcji")
+        details.append(f"Podejrzana częstotliwość: zaledwie {sekundy} sek. od poprzedniej transakcji")
         
     if 'LOCATION_JUMP_ANOMALY' in reasons:
         z_miasta = row.get('prev_city', 'Nieznane')
         do_miasta = row.get('city', 'Nieznane')
-        details.append(f"📍 Niemożliwy skok geograficzny: z [{z_miasta}] do [{do_miasta}]")
+        details.append(f"Niemożliwy skok geograficzny: z [{z_miasta}] do [{do_miasta}]")
         
     if 'STATISTICAL_AMOUNT_ANOMALY' in reasons:
-        details.append("📊 Wydatek nietypowy: kwota ponad 3-krotnie wyższa od średniej historii tej karty")
+        details.append("Wydatek nietypowy: kwota ponad 3-krotnie wyższa od średniej historii tej karty")
+    
+    if 'HOEFFDING_TREE_ML_ANOMALY' in reasons:
+        ml_reason = row.get('ml_anomaly_reason', '')
+        if ml_reason:
+            details.append(f"Uzasadnienie ML: {ml_reason}")
+        else:
+            details.append("ML wykryło podejrzany wzorzec zachowania")
         
     return " | ".join(details) if details else "Brak dodatkowych szczegółów"
 
 # interfejs
 if not data:
-    st.info("oczekuje na uruchomienie strumienia transakcji...")
+    st.info("Oczekuje na uruchomienie strumienia transakcji lub załadowanie danych z bazy...")
 else:
     df = pd.DataFrame(data)
     df = df.drop_duplicates(subset=['timestamp', 'card_id'])
+    df['amount'] = df['amount'].astype(float)
     
     # przygotowanie danych do tabeli na gorze
     df['Szczegóły anomalii'] = df.apply(parse_anomaly_details, axis=1)
@@ -98,14 +123,20 @@ else:
     st.divider()
 
     # statystyki kpi
-    st.subheader("Wskaźniki Efektywności")
+    st.subheader("Wskaźniki efektywności")
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-    kpi1.metric(label="Wykryte Anomalie", value=len(df))
-    kpi2.metric(label="Ochroniony Kapitał", value=f"{df['amount'].sum():.2f} PLN")
-    kpi3.metric(label="Zablokowane Karty", value=df['card_id'].nunique())
-    
+    kpi1.metric(label="Wykryte anomalie (suma)", value=len(df))
+
+    if 'anomaly_reasons' in df.columns:
+        ml_alerts_count = df['anomaly_reasons'].apply(lambda x: 'HOEFFDING_TREE_ML_ANOMALY' in x if isinstance(x, list) else False).sum()
+    else:
+        ml_alerts_count = 0
+
+    kpi2.metric(label="W tym alerty z modelu ML", value=int(ml_alerts_count))
+    kpi3.metric(label="Zablokowane karty", value=df['card_id'].nunique())
+
     srednia = df['amount'].mean() if not df.empty else 0
-    kpi4.metric(label="Średnia Kwota Fraudu", value=f"{srednia:.2f} PLN")
+    kpi4.metric(label="Średnia Kwota fraudu", value=f"{srednia:.2f} PLN")
 
     st.divider()
 

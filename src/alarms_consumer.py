@@ -49,6 +49,9 @@ try:
         if 'HIGH_FREQUENCY_ANOMALY' in reasons_list:
             print(f"      | czas od ostatniej operacji: {time_diff} sek.")
             
+        if 'HOEFFDING_TREE_ML_ANOMALY' in reasons_list:
+                    print(f"      | [ML] UWAGA: Drzewo Hoeffdinga sklasyfikowało profil transakcji jako podejrzany!")
+                    
         print("-" * 60)
 
 except KeyboardInterrupt:
