@@ -1,38 +1,51 @@
 # System Detekcji Anomalii Finansowych (Real-Time Fraud Detection)
 
-Projekt zrealizowany w ramach przedmiotu Przetwarzanie Strumieni Danych i Data Science. System służy do analizy transakcji płatniczych w czasie rzeczywistym i wykrywania nadużyć finansowych przy użyciu Apache Flink, Kafki oraz MongoDB.
+Projekt zrealizowany w ramach przedmiotu Przetwarzanie Strumieni Danych i Data Science. System służy do analizy transakcji płatniczych w czasie rzeczywistym i automatycznego wykrywania nadużyć finansowych (Fraud Detection) przy użyciu Apache Flink, Apache Kafka, MongoDB oraz Streamlit.
 
 ## Architektura
-System opiera się na architekturze strumieniowej:
-- **Infrastruktura:** Kafka, Zookeeper, MongoDB (uruchamiane przez `docker-compose`).
-- **Przetwarzanie (Hot Path):** Apache Flink (PyFlink) – stanowe przetwarzanie danych (Stateful Stream Processing).
+System opiera się na nowoczesnej architekturze strumieniowej sterowanej zdarzeniami (Event-Driven):
+- Infrastruktura (Docker): Kafka (Message Broker), Zookeeper, MongoDB (Cold Storage).
+- Przetwarzanie Obliczeniowe (Docker): Klaster Apache Flink z zaawansowanym zarządzaniem stanem (Stateful Stream Processing) oraz algorytmami uczenia maszynowego (Drzewa Hoeffdinga).
+- Wizualizacja (Localhost): Streamlit pełniący rolę strumieniowego monitora klasy SOC (Security Operations Center), podpięty bezpośrednio pod Kafkę.
 
 ## Wymagania systemowe
 Aby uruchomić projekt, upewnij się, że masz zainstalowane:
-- **Java (JDK 11):** Wymagane dla silnika Apache Flink oraz brokera Apache Kafka.
-- **Docker & Docker Compose:** 
-- **Python 3.11.9**
+- Docker & Docker Compose (do uruchomienia klastra, bazy i brokera)
+- Python 3.10+ (zalecany 3.11.9, do uruchomienia symulatora i dashboardu)
+- Java (JDK 11): Wymagane wewnętrznie przez biblioteki PyFlink.
 
-## Struktura projektu
-- `simulator.py`: Generuje strumień transakcji (10 000 kart, 15 miast). Wprowadza 5% anomalii.
-- `detector.py`: Silnik Flinka realizujący detekcję: limitów, statystycznych anomalii kwotowych, burstów i skoków lokalizacji.
-- `alarms_consumer.py`: Zapisuje alarmy z Kafki do MongoDB i loguje zdarzenia.
-- `test_consumer.py`: Sniffer diagnostyczny do walidacji surowych danych w Kafce.
+## Struktura projektu głównych plików
+- src/simulator.py: Producent danych Kafki. Generuje strumień transakcji (10 000 kart, 15 miast) z 5% szansą na celową anomalię (skoki lokalizacji, bursty, przekroczenia limitów).
+- src/detector.py: Serce analityczne we Flinku. Aplikacja wysyłana na klaster Dockerowy, realizująca reguły biznesowe, okna czasowe i ML. Odkłada incydenty do Kafki i asynchronicznie do MongoDB.
+- src/dashboard.py: Webowy panel analityczny na żywo, wizualizujący strukturę oszustw i przechwycone alerty prosto z tematu Kafki.
+- src/test_consumer.py: Sniffer diagnostyczny (opcjonalny) do walidacji surowych danych wejściowych w Kafce na temacie "transactions".
 
+## Instalacja i przygotowanie środowiska
+Otwórz główny folder projektu w terminalu i wykonaj poniższe kroki.
 
-## Uruchomienie (bash w folderze projektu)
-- docker-compose up -d
-- python -3.11 -m venv .venv
-- source ./.venv/bin/activate (Linux) lub .\.venv\Scripts\activate (Windows)
-- pip install -r requirements.txt
+1. Uruchom infrastrukturę kontenerową:
+docker-compose up -d
+
+2. Stwórz i aktywuj środowisko wirtualne Pythona:
+python -m venv .venv
+.\.venv\Scripts\activate (dla Windows) 
+lub 
+source .venv/bin/activate (dla Linux/macOS)
+
+3. Zainstaluj wymagane biblioteki:
+pip install -r requirements.txt
 
 ## Kolejność uruchomienia
-Zalecane uruchomienie w osobnych terminalach:
+Zaleca się uruchomienie procesów w osobnych oknach terminala (upewnij się, że środowisko .venv jest w nich aktywne).
 
-1. python detector.py
+TERMINAL 1: Wgranie zadania na klaster Flinka
+docker-compose exec jobmanager flink run -py src/detector.py
 
-2. python alarms_consumer.py
+TERMINAL 2: Uruchomienie Panelu Streamlit
+streamlit run src/dashboard.py
 
-3. python simulator.py
+TERMINAL 3: Uruchomienie Symulatora Transakcji
+python src/simulator.py
 
-4. python test_consumer.py (diagnostyka)
+TERMINAL 4 (Opcjonalny): Diagnostyka surowych danych
+python src/test_consumer.py

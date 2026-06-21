@@ -4,4 +4,7 @@ docker exec -it flink-jobmanager flink run -py /opt/flink/project/src/detector.p
 
 //wylaczanie
 docker exec -it flink-jobmanager flink list
-docker exec -it flink-jobmanager flink cancel TUTAJ_WKLEJ_JOB_ID
+docker exec -it flink-jobmanager flink cancel JOB_ID
+
+//wlaczenie dashboardu
+streamlit run dashboard.py
